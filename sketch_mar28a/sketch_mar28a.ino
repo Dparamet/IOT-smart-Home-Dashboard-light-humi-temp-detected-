@@ -3,14 +3,10 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <esp_task_wdt.h>
-#include <time.h>
-#include "config.h"
+#include "config.h" 
 
-// อัญเชิญผู้ช่วยจัดการ Token
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
-
-// ================= ⚙️ CONFIGURATION =================
 
 // ================= 📌 PIN DEFINITIONS =================
 #define RELAY1_PIN 18 
@@ -22,196 +18,293 @@
 
 // ================= 📦 OBJECTS & VARIABLES =================
 DHT dht(DHTPIN, DHTTYPE);
-
-FirebaseData fbdoStream;
-FirebaseData fbdoUpload;
+FirebaseData fbdoStream, fbdoUpload;
 FirebaseAuth auth;
-FirebaseConfig config;
+FirebaseConfig fbConfig;
 
-unsigned long previousSensorMillis = 0;
-const long sensorInterval = 5000; 
-
-unsigned long previousSettingMillis = 0;
-const long settingInterval = 10000; 
+unsigned long prevMillis = 0;
+const long interval = 500; // แก้เป็น 5 วินาที ให้เซนเซอร์และบอร์ดได้พักหายใจ
+unsigned long lastReconnectAttempt = 0;
 
 float temp = 0.0, hum = 0.0;
-int light_percent = 0;
-bool auto_mode = false;
-float auto_fan_temp = 30.0;
-bool isRelay1On = false;
-bool isRelay2On = false;
+bool isRelay1On = false, isRelay2On = false;
 
-// ================= 🛠️ FUNCTION PROTOTYPES =================
-void connectWiFi();
-void streamCallback(FirebaseStream data);
-void streamTimeoutCallback(bool timeout);
-void readSensors();
-void handleSmartAuto();
+// ระบบจัดการข้อมูลย้อนหลัง
+int dataCount = 0;
+const int maxDataLimit = 50; 
 
-// ================= 🚀 SETUP =================
-void setup() {
-  Serial.begin(115200);
-  
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-  pinMode(LED_STATUS, OUTPUT);
-  
-  digitalWrite(RELAY1_PIN, HIGH);
-  digitalWrite(RELAY2_PIN, HIGH);
-
-  dht.begin();
-
-  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-    esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
-      .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
-      .trigger_panic = true
-    };
-    esp_task_wdt_init(&twdt_config);
-  #else
-    esp_task_wdt_init(30, true);
-  #endif
-  esp_task_wdt_add(NULL);
-
-  connectWiFi();
-
-  configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-  auth.user.email = USER_EMAIL;
-  auth.user.password = USER_PASSWORD;
-  
-  config.token_status_callback = tokenStatusCallback;
-
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
-
-  if (!Firebase.RTDB.beginStream(&fbdoStream, "/iot_system/controls")) {
-    Serial.printf("Stream begin error, %s\n\n", fbdoStream.errorReason().c_str());
-  }
-  Firebase.RTDB.setStreamCallback(&fbdoStream, streamCallback, streamTimeoutCallback);
-}
-
-// ================= 🔄 MAIN LOOP =================
-void loop() {
-  esp_task_wdt_reset();
-  unsigned long currentMillis = millis();
-
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-  }
-
-  if (currentMillis - previousSensorMillis >= sensorInterval) {
-    previousSensorMillis = currentMillis;
-    readSensors();
-  }
-
-  if (currentMillis - previousSettingMillis >= settingInterval) {
-    previousSettingMillis = currentMillis;
-    handleSmartAuto();
-  }
-}
+// สถานะการเชื่อมต่อ
+bool firebaseConnected = false;
+unsigned long lastFirebaseCheck = 0;
 
 // ================= 🧰 HELPER FUNCTIONS =================
 
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  Serial.print("📡 Connecting to WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); // ดึงจาก config.h
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
     delay(500);
     Serial.print(".");
     attempts++;
+    esp_task_wdt_reset(); 
   }
+  
   if(WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi Connected!");
+    Serial.println("\n✅ WiFi Connected!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
     digitalWrite(LED_STATUS, HIGH);
   } else {
+    Serial.println("\n❌ WiFi Failed!");
     digitalWrite(LED_STATUS, LOW);
+    WiFi.disconnect();
   }
+}
+
+// ฟังก์ชันนี้แหละที่จะปรินต์ลง Serial สวยๆ
+void setRelay(int relayPin, bool state, const char* name) {
+  // สมมติว่า Relay เป็นแบบ Active Low (ถ้าเป็น Active High ให้สลับ LOW/HIGH ตรงนี้)
+  digitalWrite(relayPin, state ? LOW : HIGH);
+  Serial.printf("🔌 %s: %s\n", name, state ? "ON" : "OFF");
 }
 
 void streamCallback(FirebaseStream data) {
-  if (data.dataType() == "json") {
-    FirebaseJson *json = data.jsonObjectPtr();
-    FirebaseJsonData jsonData;
-
-    if (json->get(jsonData, "relay_1")) {
-      isRelay1On = jsonData.boolValue;
-      digitalWrite(RELAY1_PIN, isRelay1On ? LOW : HIGH);
-    }
-    if (json->get(jsonData, "relay_2")) {
-      isRelay2On = jsonData.boolValue;
-      if (!auto_mode) {
-        digitalWrite(RELAY2_PIN, isRelay2On ? LOW : HIGH);
+  String path = data.dataPath();
+  
+  if (data.dataType() == "boolean") {
+    bool val = data.boolData();
+    
+    // จัดการ Relay 1
+    if (path == "/relay_1") {
+      if (isRelay1On != val) {
+        isRelay1On = val;
+        setRelay(RELAY1_PIN, isRelay1On, "Relay 1 (Firebase)");
+      }
+    } 
+    // จัดการ Relay 2 (ลบเงื่อนไข Auto ออกไปเลย กดได้อิสระ)
+    else if (path == "/relay_2") {
+      if (isRelay2On != val) {
+        isRelay2On = val;
+        setRelay(RELAY2_PIN, isRelay2On, "Relay 2 (Firebase)");
       }
     }
-  } else if (data.dataType() == "boolean") {
-    String path = data.dataPath();
-    bool value = data.boolData();
-    if (path == "/relay_1") {
-      isRelay1On = value;
-      digitalWrite(RELAY1_PIN, isRelay1On ? LOW : HIGH);
-    } else if (path == "/relay_2" && !auto_mode) {
-      isRelay2On = value;
-      digitalWrite(RELAY2_PIN, isRelay2On ? LOW : HIGH);
-    }
+  }
+  esp_task_wdt_reset(); 
+}
+
+void streamTimeoutCallback(bool timeout) {
+  if(timeout) {
+    Serial.println("⚠️ Stream timeout");
   }
 }
 
-void streamTimeoutCallback(bool timeout) {}
-
-void readSensors() {
-  float newHum = dht.readHumidity();
-  float newTemp = dht.readTemperature();
-  int ldrRaw = analogRead(LDR_PIN);
+bool readDHTSensor(float &t, float &h) {
+  unsigned long startTime = millis();
+  h = dht.readHumidity();
+  t = dht.readTemperature();
   
-  if (!isnan(newTemp) && !isnan(newHum)) {
-    temp = newTemp;
-    hum = newHum;
+  if (isnan(h) || isnan(t)) {
+    delay(100);
+    h = dht.readHumidity();
+    t = dht.readTemperature();
+    if (isnan(h) || isnan(t)) {
+      Serial.println("⚠️ Failed to read DHT sensor");
+      return false;
+    }
   }
   
-  light_percent = map(ldrRaw, 4095, 0, 0, 100);
-  if(light_percent < 0) light_percent = 0;
-  if(light_percent > 100) light_percent = 100;
+  if (millis() - startTime > 500) {
+    Serial.println("⚠️ DHT read timeout");
+    return false;
+  }
+  return true;
+}
 
-  // 🕵️‍♂️ ปริ้นท์ค่าเซ็นเซอร์ออกจอคอม เพื่อดูว่าฮาร์ดแวร์อ่านค่าได้จริงไหม
-  Serial.printf("Temp: %.1f | Hum: %.1f | Light: %d%%\n", temp, hum, light_percent);
+void readAndSync() {
+  esp_task_wdt_reset(); 
+  
+  float h, t;
+  if (readDHTSensor(t, h)) {
+    temp = t;
+    hum = h;
+    Serial.printf("🌡️ Temp: %.1f°C, Humidity: %.1f%%\n", temp, hum);
+  }
+
+  int light = 0;
+  for(int i = 0; i < 5; i++) { 
+    light += analogRead(LDR_PIN);
+    delay(1);
+  }
+  light = light / 5;
+  light = map(light, 0, 4095, 0, 100);
+  light = constrain(light, 0, 100);
+  Serial.printf("💡 Light: %d%%\n", light);
 
   FirebaseJson json;
   json.set("temperature", temp);
   json.set("humidity", hum);
-  json.set("light_percent", light_percent);
+  json.set("light_percent", light);
   json.set("timestamp", ".sv/timestamp");
-  Firebase.RTDB.pushJSONAsync(&fbdoUpload, "/iot_system/history", &json);
-  // 🕵️‍♂️ ปริ้นท์สถานะการอัปโหลดขึ้น Firebase
-  if (Firebase.RTDB.updateNodeAsync(&fbdoUpload, "/iot_system/sensors", &json)) {
-    Serial.println("✅ Uploaded Sensors to Firebase!");
+
+  if (!Firebase.RTDB.updateNode(&fbdoUpload, "/iot_system/sensors", &json)) {
+    Serial.printf("❌ Update failed: %s\n", fbdoUpload.errorReason().c_str());
+  }
+
+  if (Firebase.RTDB.pushJSON(&fbdoUpload, "/iot_system/history", &json)) {
+    dataCount++;
+    if (dataCount >= maxDataLimit) {
+      Serial.println("🧹 Cleanup: Refreshing history data...");
+      Firebase.RTDB.deleteNode(&fbdoUpload, "/iot_system/history");
+      dataCount = 0;
+    }
+  }
+  esp_task_wdt_reset(); 
+}
+
+bool checkFirebaseConnection() {
+  unsigned long now = millis();
+  if (now - lastFirebaseCheck < 10000) return firebaseConnected;
+  lastFirebaseCheck = now;
+  
+  if (Firebase.ready()) {
+    if (!firebaseConnected) {
+      firebaseConnected = true;
+      Serial.println("✅ Firebase connected");
+    }
+    return true;
   } else {
-    Serial.println("❌ Firebase Upload Failed: " + fbdoUpload.errorReason());
+    if (firebaseConnected) {
+      firebaseConnected = false;
+      Serial.println("❌ Firebase disconnected");
+    }
+    return false;
   }
 }
 
-void handleSmartAuto() {
-  if (Firebase.RTDB.getBool(&fbdoUpload, "/iot_system/settings/auto_mode")) {
-    auto_mode = fbdoUpload.boolData();
+void loadSettings() {
+  if (!checkFirebaseConnection()) return;
+  esp_task_wdt_reset();
+  
+  unsigned long startTime = millis();
+  
+  // Get current relay states (ลบการดึง Auto ออกหมด)
+  if (Firebase.RTDB.getBool(&fbdoUpload, "/iot_system/controls/relay_1")) {
+    isRelay1On = fbdoUpload.boolData();
+    setRelay(RELAY1_PIN, isRelay1On, "Initial Relay 1");
   }
-  if (Firebase.RTDB.getFloat(&fbdoUpload, "/iot_system/settings/auto_fan_temp")) {
-    auto_fan_temp = fbdoUpload.floatData();
+  
+  if (Firebase.RTDB.getBool(&fbdoUpload, "/iot_system/controls/relay_2")) {
+    isRelay2On = fbdoUpload.boolData();
+    setRelay(RELAY2_PIN, isRelay2On, "Initial Relay 2");
   }
+  
+  if (millis() - startTime > 5000) {
+    Serial.println("⚠️ loadSettings timeout!");
+  }
+  esp_task_wdt_reset();
+}
 
-  if (auto_mode) {
-    if (temp >= auto_fan_temp && !isRelay2On) {
-      isRelay2On = true;
-      digitalWrite(RELAY2_PIN, LOW);
-      Firebase.RTDB.setBoolAsync(&fbdoUpload, "/iot_system/controls/relay_2", true);
-    } else if (temp < (auto_fan_temp - 1.0) && isRelay2On) {
-      isRelay2On = false;
-      digitalWrite(RELAY2_PIN, HIGH);
-      Firebase.RTDB.setBoolAsync(&fbdoUpload, "/iot_system/controls/relay_2", false);
+void setupFirebase() {
+  fbConfig.api_key = API_KEY;
+  fbConfig.database_url = DATABASE_URL;
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+  fbConfig.token_status_callback = tokenStatusCallback;
+  
+  fbConfig.timeout.serverResponse = 10000;
+  
+  Firebase.begin(&fbConfig, &auth);
+  Firebase.reconnectWiFi(true);
+  delay(1000);
+}
+
+// ================= 🚀 SETUP =================
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n🚀 System Starting...");
+  
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 60000, 
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+        .trigger_panic = true
+    };
+    esp_task_wdt_init(&twdt_config);
+  #else
+    esp_task_wdt_init(60, true); 
+  #endif
+  esp_task_wdt_add(NULL);
+
+  pinMode(RELAY1_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  digitalWrite(RELAY1_PIN, HIGH);
+  digitalWrite(RELAY2_PIN, HIGH);
+  pinMode(LED_STATUS, OUTPUT);
+  digitalWrite(LED_STATUS, LOW);
+  
+  dht.begin();
+  delay(2000);
+
+  connectWiFi();
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    setupFirebase();
+    loadSettings();
+    
+    if (Firebase.RTDB.beginStream(&fbdoStream, "/iot_system/controls")) {
+      Firebase.RTDB.setStreamCallback(&fbdoStream, streamCallback, streamTimeoutCallback);
+      Serial.println("✅ Stream started");
+    } else {
+      Serial.printf("❌ Stream failed: %s\n", fbdoStream.errorReason().c_str());
     }
   }
+  
+  Serial.println("✅ Setup completed!");
+  esp_task_wdt_reset();
+}
+
+// ================= 🔄 LOOP =================
+void loop() {
+  esp_task_wdt_reset();
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    unsigned long now = millis();
+    if (now - lastReconnectAttempt > 30000) { 
+      lastReconnectAttempt = now;
+      connectWiFi();
+      
+      if (WiFi.status() == WL_CONNECTED) {
+        setupFirebase();
+        if (Firebase.RTDB.beginStream(&fbdoStream, "/iot_system/controls")) {
+          Firebase.RTDB.setStreamCallback(&fbdoStream, streamCallback, streamTimeoutCallback);
+        }
+        loadSettings();
+      }
+    }
+    delay(100);
+    return; 
+  }
+
+  unsigned long now = millis();
+  
+  // อัปเดตข้อมูลเซนเซอร์ตาม interval (5 วินาที)
+  if (now - prevMillis >= interval) {
+    prevMillis = now;
+    readAndSync();
+  }
+  
+  // โหลด settings ทุก 60 วินาที (แก้จาก 100ms เป็น 60000ms ป้องกันบอร์ดค้าง)
+  static unsigned long lastSettingsLoad = 0;
+  if (now - lastSettingsLoad >= 500) { 
+    lastSettingsLoad = now;
+    loadSettings();
+  }
+  
+  delay(50);
 }

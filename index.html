@@ -9,339 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-
-    <style>
-        :root {
-            --bg-color: #0f141b;
-            --card-bg: #161d27;
-            --card-bg-soft: #1a2431;
-            --text-main: #e8eef8;
-            --text-muted: #a2afc2;
-            --accent-color: #8cc4ff;
-            --danger-color: #ff7a7a;
-            --success-color: #4fd08f;
-            --border-color: #2a3647;
-            --border-radius: 14px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Sarabun', sans-serif;
-        }
-
-        body {
-            background: radial-gradient(1100px 560px at 10% -15%, #1b2635 0%, var(--bg-color) 50%);
-            color: var(--text-main);
-            padding: 24px;
-            min-height: 100vh;
-            line-height: 1.45;
-        }
-
-        /* --- UI Containers --- */
-        #setup-container, #login-container, #app-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: none; /* Hidden by default via JS */
-        }
-
-        .auth-box {
-            background-color: var(--card-bg);
-            max-width: 400px;
-            margin: 100px auto;
-            padding: 30px;
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-            text-align: center;
-        }
-
-        /* --- Header & Status --- */
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .status-badge {
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: color 0.2s ease, background-color 0.2s ease;
-        }
-
-        .status-online { background-color: rgba(0, 230, 118, 0.2); color: var(--success-color); }
-        .status-offline { background-color: rgba(255, 75, 75, 0.2); color: var(--danger-color); }
-        .status-connecting { background-color: rgba(255, 209, 102, 0.2); color: #ffd166; }
-
-        .dot {
-            height: 10px; width: 10px;
-            background-color: currentColor;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse-dot 1.4s ease-in-out infinite;
-        }
-
-        .status-connecting .dot {
-            animation: pulse-pulse 1s ease-in-out infinite;
-        }
-
-        .status-online .dot {
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.1); }
-        }
-
-        @keyframes pulse-pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.25); }
-        }
-
-        /* --- Grid Layout --- */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.14);
-            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-            animation: cardIn 320ms ease;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            border-color: #364b67;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.18);
-        }
-
-        .card h3 { color: var(--text-muted); font-size: 1rem; margin-bottom: 14px; font-weight: 500; }
-        .card .value {
-            font-size: 2.25em;
-            font-weight: 700;
-            color: var(--accent-color);
-            letter-spacing: 0.2px;
-            transition: transform 0.2s ease, color 0.2s ease;
-            will-change: transform;
-        }
-        .card .unit { font-size: 0.4em; color: var(--text-muted); }
-
-        .value.updated {
-            transform: translateY(-1px) scale(1.01);
-            color: #a8d2ff;
-        }
-
-        h1 { font-size: 1.65rem; font-weight: 600; letter-spacing: 0.2px; }
-        h2 { font-size: 1.3rem; font-weight: 600; }
-
-        /* --- Inputs & Buttons --- */
-        input {
-            width: 100%; padding: 12px; margin: 10px 0;
-            background-color: #121a25; border: 1px solid #32445e;
-            color: white; border-radius: 6px; outline: none;
-        }
-        
-        input:focus {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 2px rgba(140, 196, 255, 0.15);
-        }
-
-        button {
-            background: #8cc4ff;
-            color: #0d1a2a;
-            border: 1px solid rgba(255,255,255,0.08);
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            width: 100%;
-            transition: transform 0.2s ease, opacity 0.2s ease;
-        }
-        
-        button:hover { opacity: 0.92; transform: translateY(-1px); }
-        button:active { transform: translateY(0); }
-        button.btn-danger { background: var(--danger-color); color: #311111; width: auto; }
-
-        /* --- Toggle Switch (Optimistic UI) --- */
-        .switch-container {
-            display: flex; justify-content: space-between;
-            align-items: center; margin: 15px 0;
-            padding: 10px; background: var(--card-bg-soft); border-radius: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        .switch-container > span {
-            font-size: 0.98rem;
-        }
-
-        .switch {
-            position: relative; display: inline-block;
-            width: 60px; height: 34px;
-        }
-
-        .switch input { opacity: 0; width: 0; height: 0; }
-
-        .slider {
-            position: absolute; cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #444; transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute; content: "";
-            height: 26px; width: 26px; left: 4px; bottom: 4px;
-            background-color: white; transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider { background-color: var(--success-color); }
-        input:checked + .slider:before { transform: translateX(26px); }
-
-        /* Chart Container */
-        .chart-container {
-            background-color: var(--card-bg); padding: 20px;
-            border-radius: var(--border-radius); height: 350px;
-            border: 1px solid var(--border-color);
-        }
-
-        .log-card {
-            margin-top: 6px;
-        }
-
-        .log-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            gap: 10px;
-        }
-
-        .log-head h3 {
-            margin: 0;
-        }
-
-        .btn-ghost {
-            background: transparent;
-            color: var(--text-muted);
-            border: 1px solid var(--border-color);
-            width: auto;
-            padding: 8px 12px;
-            font-weight: 500;
-        }
-
-        .btn-ghost:hover {
-            color: var(--text-main);
-            border-color: #425a78;
-            transform: none;
-        }
-
-        .log-panel {
-            max-height: 210px;
-            overflow: auto;
-            background: #111823;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 10px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 0.86rem;
-        }
-
-        .log-empty {
-            color: #7f8ea4;
-            padding: 4px 2px;
-        }
-
-        .log-entry {
-            display: grid;
-            grid-template-columns: 72px 54px 1fr;
-            gap: 10px;
-            padding: 6px 4px;
-            border-bottom: 1px dashed rgba(66, 90, 120, 0.28);
-            animation: fadeUp 220ms ease;
-        }
-
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-
-        .log-time { color: #8da0ba; }
-        .log-level { font-weight: 700; letter-spacing: 0.25px; }
-        .log-level.info { color: #8cc4ff; }
-        .log-level.warn { color: #ffd166; }
-        .log-level.error { color: #ff8f8f; }
-        .log-msg { color: #dce7f6; }
-
-        @keyframes cardIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(3px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .muted {
-            color: var(--text-muted);
-            margin-bottom: 20px;
-        }
-
-        .divider {
-            border: 1px solid var(--border-color);
-            margin: 20px 0;
-        }
-
-        .inline-check {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-            color: var(--text-main);
-        }
-
-        .inline-check input {
-            width: auto;
-            margin: 0;
-        }
-
-        .mt-10 {
-            margin-top: 10px;
-        }
-
-        .mt-15 {
-            margin-top: 15px;
-        }
-
-        .w-full {
-            width: 100%;
-        }
-
-        @media (max-width: 860px) {
-            header {
-                flex-direction: column;
-                gap: 12px;
-                align-items: flex-start;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
@@ -370,10 +38,12 @@
     <div id="app-container">
         <header>
             <div>
-                <h1>Smart Dashboard</h1>
+                <h1>SMART IOT SYSMTEM DHT LDR RELAY</h1>
+                <div id="current-time" class="live-time">--:--:--</div>
                 <div id="board-status" class="status-badge status-offline">
                     <span class="dot"></span> <span id="status-text">กำลังซิงค์ฮาร์ดแวร์...</span>
                 </div>
+                <div id="status-meta" class="status-meta">กำลังตรวจสอบการเชื่อมต่อ...</div>
             </div>
             <button id="btn-logout" class="btn-danger">ออกจากระบบ</button>
         </header>
@@ -390,6 +60,23 @@
             <div class="card">
                 <h3>ความสว่าง</h3>
                 <div class="value"><span id="val-light">--</span><span class="unit"> %</span></div>
+            </div>
+            <div class="card">
+                <h3>System Health</h3>
+                <div class="health-list">
+                    <div class="health-row">
+                        <span class="health-label">Last Sync</span>
+                        <span class="health-value" id="health-last-sync">--:--:--</span>
+                    </div>
+                    <div class="health-row">
+                        <span class="health-label">Sync Age</span>
+                        <span class="health-value" id="health-sync-age">--</span>
+                    </div>
+                    <div class="health-row">
+                        <span class="health-label">Relay Queue</span>
+                        <span class="health-value" id="health-relay-queue">พร้อม</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -410,19 +97,57 @@
                         <span class="slider"></span>
                     </label>
                 </div>
-
-                <hr class="divider">
-                
-                <h3>โหมดอัจฉริยะ (Smart Auto)</h3>
-                <label class="inline-check">
-                    <input type="checkbox" id="toggle-auto"> เปิดใช้งานโหมดอัตโนมัติ
-                </label>
-                <input type="number" id="input-auto-temp" placeholder="อุณหภูมิที่พัดลมทำงาน (> °C)">
-                <button id="btn-save-auto" class="mt-10">บันทึกการตั้งค่า</button>
             </div>
 
             <div class="chart-container">
                 <canvas id="historyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">Dashboard แยกตามแต่ละค่า</div>
+            <div class="metric-dashboard-grid">
+                <div class="metric-detail-card" id="metric-temp-card">
+                    <div class="metric-detail-head">
+                        <span class="metric-detail-name">อุณหภูมิ (°C)</span>
+                        <span class="metric-trend flat" id="metric-temp-trend">ทรงตัว</span>
+                    </div>
+                    <div class="metric-detail-current" id="metric-temp-current">-- °C</div>
+                    <div class="mini-chart-wrap"><canvas id="mini-temp-chart"></canvas></div>
+                    <div class="metric-stats">
+                        <div>ต่ำสุด<strong id="metric-temp-min">--</strong></div>
+                        <div>เฉลี่ย<strong id="metric-temp-avg">--</strong></div>
+                        <div>สูงสุด<strong id="metric-temp-max">--</strong></div>
+                    </div>
+                </div>
+
+                <div class="metric-detail-card" id="metric-hum-card">
+                    <div class="metric-detail-head">
+                        <span class="metric-detail-name">ความชื้น (%)</span>
+                        <span class="metric-trend flat" id="metric-hum-trend">ทรงตัว</span>
+                    </div>
+                    <div class="metric-detail-current" id="metric-hum-current">-- %</div>
+                    <div class="mini-chart-wrap"><canvas id="mini-hum-chart"></canvas></div>
+                    <div class="metric-stats">
+                        <div>ต่ำสุด<strong id="metric-hum-min">--</strong></div>
+                        <div>เฉลี่ย<strong id="metric-hum-avg">--</strong></div>
+                        <div>สูงสุด<strong id="metric-hum-max">--</strong></div>
+                    </div>
+                </div>
+
+                <div class="metric-detail-card" id="metric-light-card">
+                    <div class="metric-detail-head">
+                        <span class="metric-detail-name">ความสว่าง (%)</span>
+                        <span class="metric-trend flat" id="metric-light-trend">ทรงตัว</span>
+                    </div>
+                    <div class="metric-detail-current" id="metric-light-current">-- %</div>
+                    <div class="mini-chart-wrap"><canvas id="mini-light-chart"></canvas></div>
+                    <div class="metric-stats">
+                        <div>ต่ำสุด<strong id="metric-light-min">--</strong></div>
+                        <div>เฉลี่ย<strong id="metric-light-avg">--</strong></div>
+                        <div>สูงสุด<strong id="metric-light-max">--</strong></div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -437,475 +162,6 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getDatabase, ref, onValue, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-
-        // --- DOM Elements ---
-        const $ = (id) => document.getElementById(id);
-        const setupDiv = $('setup-container');
-        const loginDiv = $('login-container');
-        const appDiv = $('app-container');
-        const errDiv = $('login-error');
-        const elStatusBadge = $('board-status');
-        const elStatusText = $('status-text');
-        const logPanel = $('log-panel');
-        const btnClearLog = $('btn-clear-log');
-        const metricEls = {
-            temp: $('val-temp').parentElement,
-            hum: $('val-hum').parentElement,
-            light: $('val-light').parentElement
-        };
-        
-        // --- State Management ---
-        let app, auth, db;
-        let lastSyncTime = 0;
-        let chartInstance = null;
-        let heartbeatTimer = null;
-        let stopIoTListeners = [];
-        let iotStarted = false;
-        let uiHandlersBound = false;
-        let lastBoardState = 'syncing';
-        const LOG_LIMIT = 140;
-        const logQueue = [];
-        let logFlushScheduled = false;
-
-        function isFiniteNumber(val) {
-            return Number.isFinite(Number(val));
-        }
-
-        function toNumberOrNull(val) {
-            const n = Number(val);
-            return Number.isFinite(n) ? n : null;
-        }
-
-        function normalizeTimestamp(rawTs) {
-            const n = Number(rawTs);
-            if (!Number.isFinite(n)) return null;
-            // รองรับทั้งวินาทีและมิลลิวินาที
-            return n < 1e12 ? n * 1000 : n;
-        }
-
-        function formatTimeLabel(timestampMs) {
-            if (!Number.isFinite(timestampMs)) return '';
-            const d = new Date(timestampMs);
-            if (Number.isNaN(d.getTime())) return '';
-            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-        }
-
-        function formatSensorValue(val, digits = 1) {
-            return isFiniteNumber(val) ? Number(val).toFixed(digits) : '--';
-        }
-
-        function pulseValue(el) {
-            if (!el) return;
-            el.classList.remove('updated');
-            // Force reflow to restart animation class reliably
-            void el.offsetWidth;
-            el.classList.add('updated');
-            setTimeout(() => el.classList.remove('updated'), 190);
-        }
-
-        function enqueueLog(level, message) {
-            const now = new Date();
-            const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-            logQueue.push({ level, message, time });
-            if (!logFlushScheduled) {
-                logFlushScheduled = true;
-                requestAnimationFrame(flushLogs);
-            }
-        }
-
-        function flushLogs() {
-            logFlushScheduled = false;
-            if (!logPanel || logQueue.length === 0) return;
-
-            const empty = logPanel.querySelector('.log-empty');
-            if (empty) empty.remove();
-
-            const fragment = document.createDocumentFragment();
-            while (logQueue.length > 0) {
-                const item = logQueue.shift();
-                const row = document.createElement('div');
-                row.className = 'log-entry';
-
-                const timeEl = document.createElement('span');
-                timeEl.className = 'log-time';
-                timeEl.textContent = item.time;
-
-                const levelEl = document.createElement('span');
-                levelEl.className = `log-level ${item.level}`;
-                levelEl.textContent = item.level.toUpperCase();
-
-                const msgEl = document.createElement('span');
-                msgEl.className = 'log-msg';
-                msgEl.textContent = item.message;
-
-                row.append(timeEl, levelEl, msgEl);
-                fragment.appendChild(row);
-            }
-            logPanel.appendChild(fragment);
-
-            while (logPanel.children.length > LOG_LIMIT) {
-                logPanel.removeChild(logPanel.firstElementChild);
-            }
-            logPanel.scrollTop = logPanel.scrollHeight;
-        }
-
-        function clearLogs() {
-            logPanel.innerHTML = '<div class="log-empty">ยังไม่มี log</div>';
-            enqueueLog('info', 'ล้าง Log เรียบร้อย');
-        }
-
-        function cleanupIoTLogic() {
-            stopIoTListeners.forEach(unsub => {
-                if (typeof unsub === 'function') unsub();
-            });
-            stopIoTListeners = [];
-            if (heartbeatTimer) {
-                clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
-            }
-            iotStarted = false;
-            lastBoardState = 'syncing';
-            elStatusBadge.className = 'status-badge status-offline';
-            elStatusText.textContent = 'กำลังซิงค์ฮาร์ดแวร์...';
-            enqueueLog('warn', 'หยุดการเชื่อมต่อ IoT ชั่วคราว');
-        }
-
-        function bindIoTUIHandlers() {
-            if (uiHandlersBound) return;
-            uiHandlersBound = true;
-
-            $('toggle-relay1').addEventListener('change', (e) => {
-                if (!db) return;
-                const state = e.target.checked;
-                update(ref(db, 'iot_system/controls'), { relay_1: state }).then(() => {
-                    enqueueLog('info', `Relay 1 => ${state ? 'ON' : 'OFF'}`);
-                }).catch(err => {
-                    e.target.checked = !state; // Revert if failed
-                    console.error('Failed to sync relay_1:', err);
-                    enqueueLog('error', `Relay 1 sync fail: ${err.message}`);
-                });
-            });
-
-            $('toggle-relay2').addEventListener('change', (e) => {
-                if (!db) return;
-                const state = e.target.checked;
-                update(ref(db, 'iot_system/controls'), { relay_2: state }).then(() => {
-                    enqueueLog('info', `Relay 2 => ${state ? 'ON' : 'OFF'}`);
-                }).catch(err => {
-                    e.target.checked = !state; // Revert if failed
-                    console.error('Failed to sync relay_2:', err);
-                    enqueueLog('error', `Relay 2 sync fail: ${err.message}`);
-                });
-            });
-
-            $('btn-save-auto').addEventListener('click', () => {
-                if (!db) return;
-                const autoMode = $('toggle-auto').checked;
-                const fanTemp = Number.parseFloat($('input-auto-temp').value) || 30.0;
-
-                update(ref(db, 'iot_system/settings'), {
-                    auto_mode: autoMode,
-                    auto_fan_temp: fanTemp
-                }).then(() => {
-                    enqueueLog('info', `Save Smart Auto: mode=${autoMode ? 'ON' : 'OFF'}, temp=${fanTemp}°C`);
-                    alert('บันทึกโหมดอัจฉริยะเรียบร้อย!');
-                }).catch((err) => {
-                    enqueueLog('error', `Save Smart Auto fail: ${err.message}`);
-                });
-            });
-
-            btnClearLog?.addEventListener('click', clearLogs);
-        }
-
-        // --- 1. Init Flow ---
-        function checkSetup() {
-            const configStr = localStorage.getItem('iot_firebase_config');
-            if (!configStr) {
-                setupDiv.style.display = 'block';
-                loginDiv.style.display = 'none';
-                appDiv.style.display = 'none';
-                enqueueLog('warn', 'ยังไม่ได้ตั้งค่า Firebase');
-                return;
-            }
-
-            try {
-                const config = JSON.parse(configStr);
-                initFirebase(config);
-            } catch (error) {
-                console.error('Invalid local config:', error);
-                localStorage.removeItem('iot_firebase_config');
-                setupDiv.style.display = 'block';
-                loginDiv.style.display = 'none';
-                appDiv.style.display = 'none';
-                enqueueLog('error', 'Firebase config ไม่ถูกต้อง (ถูกรีเซ็ตแล้ว)');
-            }
-        }
-
-        $('btn-save-setup').addEventListener('click', () => {
-            const apiKey = $('apiKey').value.trim();
-            const databaseURL = $('databaseURL').value.trim();
-            if(!apiKey || !databaseURL) return alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-            
-            const config = { apiKey, databaseURL };
-            localStorage.setItem('iot_firebase_config', JSON.stringify(config));
-            enqueueLog('info', 'บันทึก Firebase config สำเร็จ');
-            location.reload(); // Reload to start fresh
-        });
-
-        $('btn-reset-setup').addEventListener('click', () => {
-            localStorage.removeItem('iot_firebase_config');
-            enqueueLog('warn', 'รีเซ็ต Firebase config');
-            location.reload();
-        });
-
-        function initFirebase(config) {
-            try {
-                app = initializeApp(config);
-                auth = getAuth(app);
-                db = getDatabase(app);
-                
-                setupDiv.style.display = 'none';
-                
-                // Auth Listener
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        loginDiv.style.display = 'none';
-                        appDiv.style.display = 'block';
-                        enqueueLog('info', `เข้าสู่ระบบสำเร็จ: ${user.email ?? 'unknown user'}`);
-                        startIoTLogic();
-                    } else {
-                        cleanupIoTLogic();
-                        loginDiv.style.display = 'block';
-                        appDiv.style.display = 'none';
-                        enqueueLog('warn', 'ออกจากระบบแล้ว');
-                    }
-                });
-            } catch (error) {
-                console.error("Firebase Init Error:", error);
-                alert('ตั้งค่า Firebase ผิดพลาด กรุณารีเซ็ตแล้วลองใหม่');
-                localStorage.removeItem('iot_firebase_config');
-                enqueueLog('error', `Firebase init fail: ${error.message}`);
-                location.reload();
-            }
-        }
-
-        // --- 2. Auth Flow ---
-        $('btn-login').addEventListener('click', () => {
-            const email = $('email').value.trim();
-            const pass = $('password').value;
-            errDiv.style.display = 'none';
-            
-            signInWithEmailAndPassword(auth, email, pass)
-                .catch((error) => {
-                    errDiv.textContent = "เข้าสู่ระบบล้มเหลว: " + error.message;
-                    errDiv.style.display = 'block';
-                    enqueueLog('error', `Login fail: ${error.message}`);
-                });
-        });
-
-        $('btn-logout').addEventListener('click', () => {
-            enqueueLog('warn', 'กำลังออกจากระบบ...');
-            signOut(auth);
-        });
-
-        // --- 3. IoT Core Logic ---
-        function startIoTLogic() {
-            if (iotStarted) return;
-            iotStarted = true;
-            bindIoTUIHandlers();
-            initChart();
-
-            // References
-            const sensorsRef = ref(db, 'iot_system/sensors');
-            const controlsRef = ref(db, 'iot_system/controls');
-            const settingsRef = ref(db, 'iot_system/settings');
-            const historyRef = query(ref(db, 'iot_system/history'), limitToLast(60));
-
-            // A. Sensors Listener
-            const offSensors = onValue(sensorsRef, (snapshot) => {
-                const data = snapshot.val();
-                if(data) {
-                    $('val-temp').textContent = formatSensorValue(data.temperature, 1);
-                    $('val-hum').textContent = formatSensorValue(data.humidity, 1);
-                    $('val-light').textContent = isFiniteNumber(data.light_percent) ? Number(data.light_percent) : '--';
-                    pulseValue(metricEls.temp);
-                    pulseValue(metricEls.hum);
-                    pulseValue(metricEls.light);
-
-                    const ts = normalizeTimestamp(data.timestamp);
-                    if (ts !== null) lastSyncTime = ts; // Update Heartbeat
-                }
-            });
-
-            // B. Controls Listener (Sync back from DB)
-            const offControls = onValue(controlsRef, (snapshot) => {
-                const data = snapshot.val();
-                if(data) {
-                    $('toggle-relay1').checked = Boolean(data.relay_1);
-                    $('toggle-relay2').checked = Boolean(data.relay_2);
-                }
-            });
-
-            // C. Settings Listener
-            const offSettings = onValue(settingsRef, (snapshot) => {
-                const data = snapshot.val();
-                if(data) {
-                    $('toggle-auto').checked = Boolean(data.auto_mode);
-                    $('input-auto-temp').value = isFiniteNumber(data.auto_fan_temp) ? data.auto_fan_temp : '';
-                }
-            });
-
-            // D. Chart History Listener
-            const offHistory = onValue(historyRef, (snapshot) => {
-                const data = snapshot.val();
-                if(data) {
-                    const labels = [];
-                    const tempValues = [];
-                    const humValues = [];
-                    const lightValues = [];
-
-                    // รองรับหลายรูปแบบ: timestamp ใน entry หรือ timestamp ใน key
-                    Object.entries(data).forEach(([key, entry]) => {
-                        const ts = normalizeTimestamp(entry?.timestamp) ?? normalizeTimestamp(key);
-                        labels.push(formatTimeLabel(ts));
-                        tempValues.push(toNumberOrNull(entry?.temperature));
-                        humValues.push(toNumberOrNull(entry?.humidity));
-                        lightValues.push(toNumberOrNull(entry?.light_percent ?? entry?.light));
-                    });
-
-                    updateChart(labels, tempValues, humValues, lightValues);
-                }
-            });
-
-            stopIoTListeners.push(offSensors, offControls, offSettings, offHistory);
-
-            // --- Heartbeat Monitor (Check if offline) ---
-            heartbeatTimer = setInterval(() => {
-                const now = Date.now();
-
-                // If last sync was more than 8 seconds ago (8000ms) = faster offline detection
-                const nextState = (lastSyncTime === 0)
-                    ? 'connecting'
-                    : (now - lastSyncTime > 8000 ? 'offline' : 'online');
-
-                if (nextState !== lastBoardState) {
-                    lastBoardState = nextState;
-                    if (nextState === 'online') {
-                        elStatusBadge.className = 'status-badge status-online';
-                        elStatusText.textContent = 'ออนไลน์ (Online)';
-                        enqueueLog('info', 'อุปกรณ์กลับมาออนไลน์');
-                    } else if (nextState === 'offline') {
-                        elStatusBadge.className = 'status-badge status-offline';
-                        elStatusText.textContent = 'ออฟไลน์ (Offline)';
-                        enqueueLog('warn', 'อุปกรณ์ออฟไลน์ (เกิน 8 วินาที)');
-                    } else {
-                        elStatusBadge.className = 'status-badge status-connecting';
-                        elStatusText.textContent = 'เชื่อมต่อ... (Connecting)';
-                        enqueueLog('info', 'กำลังเชื่อมต่ออุปกรณ์...')
-                    }
-                }
-            }, 300);
-
-            enqueueLog('info', 'เริ่มต้น IoT runtime สำเร็จ');
-        }
-
-        // --- Chart.js Setup ---
-       
-        function initChart() {
-            if (typeof Chart === 'undefined') {
-                setTimeout(initChart, 120);
-                return;
-            }
-            const ctx = $('historyChart').getContext('2d');
-            Chart.defaults.color = '#a0a0b0'; // Dark mode text
-            
-            // 🚨 โค้ดพระเอก: ถ้ามีกราฟเก่าค้างอยู่ ให้ทำลายทิ้งก่อนวาดใหม่!
-            if (chartInstance !== null) {
-                chartInstance.destroy();
-            }
-            
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        {
-                            label: 'อุณหภูมิ (°C)',
-                            borderColor: '#ff4b4b',
-                            backgroundColor: 'rgba(255, 75, 75, 0.1)',
-                            data: [],
-                            tension: 0.4,
-                            fill: true,
-                            yAxisID: 'yTemp'
-                        },
-                        {
-                            label: 'ความชื้น (%)',
-                            borderColor: '#00f2fe',
-                            backgroundColor: 'rgba(0, 242, 254, 0.1)',
-                            data: [],
-                            tension: 0.4,
-                            fill: true,
-                            yAxisID: 'yPercent'
-                        },
-                        {
-                            label: 'ความสว่าง (%)',
-                            borderColor: '#ffd166',
-                            backgroundColor: 'rgba(255, 209, 102, 0.08)',
-                            data: [],
-                            tension: 0.35,
-                            fill: false,
-                            yAxisID: 'yPercent'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
-                    scales: {
-                        yTemp: {
-                            type: 'linear',
-                            position: 'left',
-                            beginAtZero: false,
-                            title: { display: true, text: '°C' }
-                        },
-                        yPercent: {
-                            type: 'linear',
-                            position: 'right',
-                            min: 0,
-                            max: 100,
-                            grid: { drawOnChartArea: false },
-                            title: { display: true, text: '%' }
-                        }
-                    },
-                    animation: {
-                        duration: 260,
-                        easing: 'easeOutQuad'
-                    }
-                }
-            });
-
-            enqueueLog('info', 'พร้อมใช้งานกราฟข้อมูลย้อนหลัง');
-        }
-
-        function updateChart(labels, temp, hum, light) {
-            if(!chartInstance) return;
-            chartInstance.data.labels = labels;
-            chartInstance.data.datasets[0].data = temp;
-            chartInstance.data.datasets[1].data = hum;
-            chartInstance.data.datasets[2].data = light;
-            chartInstance.update('active');
-        }
-
-        // --- Boot App ---
-        checkSetup();
-    </script>
+    <script type="module" src="./app.js"></script>
 </body>
 </html>
