@@ -1,6 +1,7 @@
 # Smart IoT Dashboard 🌐
 
 แดชบอร์ด IoT สำหรับแสดงผลข้อมูลเซนเซอร์และควบคุมรีเลย์แบบ real-time ด้วย Firebase Realtime Database พร้อม UI สมัยใหม่, ระบบ log, และสถานะการเชื่อมต่อที่ชัดเจน
+<img width="823" height="871" alt="image" src="https://github.com/user-attachments/assets/c4b9156b-d1f3-4ab5-8f7e-e1d2e9c11fad" />
 
 ---
 
